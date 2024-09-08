@@ -27,6 +27,11 @@ stages:
     displayName: Build
 
     steps:
+    - task: Bash@3
+      displayName: 'Install zip utility'
+      inputs:
+        targetType: 'inline'
+        script: 'sudo apt-get update && sudo apt-get install -y zip'
     - task: NodeTool@0
       inputs:
         versionSpec: '18.x'
