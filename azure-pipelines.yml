@@ -5,6 +5,8 @@
 
 trigger:
 - main
+pool: 
+  name: Default
 
 variables:
 
@@ -12,13 +14,10 @@ variables:
   azureSubscription: '4ea4d60c-15bc-4ad2-96bd-4a72deaf74d8'
 
   # Function app name
-  functionAppName: ''
+  functionAppName: 'qrcode-devopswithritesh'
 
   # Environment name
-  environmentName: ''
-
-  # Agent VM image name
-  vmImageName: 'ubuntu-latest'
+  environmentName: 'qrcode-devopswithritesh'
 
 stages:
 - stage: Build
@@ -26,58 +25,57 @@ stages:
   jobs:
   - job: Build
     displayName: Build
-    pool:
-      vmImage: $(vmImageName)
 
     steps:
     - task: NodeTool@0
       inputs:
-        versionSpec: '10.x'
+        versionSpec: '18.x'
       displayName: 'Install Node.js'
 
     - script: |
-        if [ -f extensions.csproj ]
-        then
-            dotnet build extensions.csproj --runtime ubuntu.16.04-x64 --output ./bin
-        fi
-      displayName: 'Build extensions'
-
-    - script: |
+        cd qrCodeGenerator
         npm install
         npm run build --if-present
         npm run test --if-present
       displayName: 'Prepare binaries'
+    
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)/qrCodeGenerator/GenerateQRCode/'
+        Contents: '**'
+        TargetFolder: '$(System.DefaultWorkingDirectory)/qrCodeGenerator/'
+      displayName: 'Copy Files to Build Directory'
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
-        rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)/qrCodeGenerator'
         includeRootFolder: false
         archiveType: zip
-        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/qrCodeGenerator/$(Build.BuildId).zip
         replaceExistingArchive: true
 
-    - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+    - upload: $(Build.ArtifactStagingDirectory)/qrCodeGenerator/$(Build.BuildId).zip
       artifact: drop
 
 - stage: Deploy
   displayName: Deploy stage
   dependsOn: Build
-  condition: succeeded()
+  condition: succeeded() # This stage will run only if first stage is succeeded
   jobs:
   - deployment: Deploy
     displayName: Deploy
     environment: $(environmentName)
-    pool:
-      vmImage: $(vmImageName)
+    pool: 
+     name: Default
     strategy:
       runOnce:
         deploy:
           steps:
-          - task: AzureFunctionApp@1
-            displayName: 'Azure Functions App Deploy: '
+          - task: AzureFunctionApp@2
             inputs:
-              azureSubscription: '$(azureSubscription)'
-              appType: functionAppLinux
-              appName: $(functionAppName)
-              package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+              connectedServiceNameARM: 'Pay-As-You-Go(4accce4f-9342-4b5d-bf6b-5456d8fa879d)'
+              appType: 'functionApp'
+              appName: '$(functionAppName)'
+              package: '$(Pipeline.Workspace)/drop/$(Build.BuildID).zip'
+              deploymentMethod: 'zipDeploy'
